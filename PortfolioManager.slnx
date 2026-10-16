@@ -1,0 +1,16 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/PortfolioManager.Core/PortfolioManager.Core.csproj" />
+    <Project Path="src/PortfolioManager.Data.Migrations.Sqlite/PortfolioManager.Data.Migrations.Sqlite.csproj" />
+    <Project Path="src/PortfolioManager.Data.Migrations.SqlServer/PortfolioManager.Data.Migrations.SqlServer.csproj" />
+    <Project Path="src/PortfolioManager.Data/PortfolioManager.Data.csproj" />
+    <Project Path="src/PortfolioManager.Web/PortfolioManager.Web.csproj" />
+    <Project Path="src/PortfolioManager.Worker/PortfolioManager.Worker.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/PortfolioManager.Core.Tests/PortfolioManager.Core.Tests.csproj" />
+    <Project Path="tests/PortfolioManager.Data.Tests/PortfolioManager.Data.Tests.csproj" />
+    <Project Path="tests/PortfolioManager.Web.Tests/PortfolioManager.Web.Tests.csproj" />
+    <Project Path="tests/PortfolioManager.Worker.Tests/PortfolioManager.Worker.Tests.csproj" />
+  </Folder>
+</Solution>
