@@ -1,0 +1,163 @@
+@page "/admin/users"
+@attribute [Authorize(Policy = AppPolicies.AdminOnly)]
+@inject IUserAdminService UserAdmin
+@inject ICurrentUser CurrentUser
+@inject ConfirmService Confirm
+@inject ISnackbar Snackbar
+
+<PageTitle>Users</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="my-4">
+    <PageHeader Title="Users">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd" OnClick="StartNew">New user</MudButton>
+    </PageHeader>
+
+    @if (_items is null)
+    {
+        <MudProgressLinear Indeterminate="true" />
+    }
+    else
+    {
+        <MudTable Items="_items" Dense="true" Hover="true">
+            <HeaderContent>
+                <MudTh>Email</MudTh><MudTh>Name</MudTh><MudTh>Role</MudTh><MudTh>Active</MudTh><MudTh></MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>@context.Email</MudTd>
+                <MudTd>@context.DisplayName</MudTd>
+                <MudTd>@context.Role</MudTd>
+                <MudTd><MudChip T="string" Size="Size.Small" Color="@(context.IsActive ? Color.Success : Color.Default)">@(context.IsActive ? "Active" : "Locked")</MudChip></MudTd>
+                <MudTd>
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="() => StartEdit(context)" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="() => DeleteAsync(context)" />
+                </MudTd>
+            </RowTemplate>
+            <NoRecordsContent><MudText>No users.</MudText></NoRecordsContent>
+        </MudTable>
+    }
+
+    @if (_edit is not null)
+    {
+        <MudPaper Class="pa-4 mt-4" Elevation="1">
+            <MudText Typo="Typo.h6" Class="mb-2">@(_edit.Id is null ? "New user" : "Edit user")</MudText>
+            <MudForm @ref="_form" @bind-IsValid="_valid">
+                <MudGrid>
+                    <MudItem xs="12" md="4"><MudTextField T="string" Label="Email" @bind-Value="_edit.Email" Required="true" ReadOnly="@(_edit.Id is not null)" /></MudItem>
+                    <MudItem xs="12" md="3"><MudTextField T="string" Label="Display name" @bind-Value="_edit.DisplayName" MaxLength="100" /></MudItem>
+                    <MudItem xs="12" md="2">
+                        <MudSelect T="string" Label="Role" @bind-Value="_edit.Role" Required="true">
+                            <MudSelectItem Value="@("Admin")">Admin</MudSelectItem>
+                            <MudSelectItem Value="@("User")">User</MudSelectItem>
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12" md="3"><MudSwitch T="bool" @bind-Value="_edit.IsActive" Color="Color.Primary" Label="Active" /></MudItem>
+                    @if (_edit.Id is null)
+                    {
+                        <MudItem xs="12" md="4"><MudTextField T="string" Label="Password" @bind-Value="_edit.Password" InputType="InputType.Password" Required="true" /></MudItem>
+                    }
+                </MudGrid>
+            </MudForm>
+            <MudButton Class="mt-3" Variant="Variant.Filled" Color="Color.Primary" Disabled="@(!_valid || _saving)" OnClick="SaveAsync">Save</MudButton>
+            <MudButton Class="mt-3 ml-2" Variant="Variant.Outlined" OnClick="() => _edit = null">Cancel</MudButton>
+
+            @if (_edit.Id is not null)
+            {
+                <MudDivider Class="my-4" />
+                <MudText Typo="Typo.subtitle1" Class="mb-2">Reset password</MudText>
+                <MudTextField T="string" Label="New password" @bind-Value="_newPassword" InputType="InputType.Password" />
+                <MudButton Class="mt-2" Variant="Variant.Outlined" Disabled="@(string.IsNullOrEmpty(_newPassword) || _saving)" OnClick="ResetPasswordAsync">Reset password</MudButton>
+            }
+        </MudPaper>
+    }
+</MudContainer>
+
+@code {
+    private IReadOnlyList<UserRow>? _items;
+    private UserEdit? _edit;
+    private MudForm? _form;
+    private bool _valid, _saving;
+    private string? _newPassword;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _items = await UserAdmin.ListAsync(await CurrentUser.GetAsync());
+        }
+        catch (Exception ex)
+        {
+            _items ??= Array.Empty<UserRow>();
+            Snackbar.Error(ex);
+        }
+    }
+
+    private void StartNew()
+    {
+        _newPassword = null;
+        _edit = new UserEdit();
+    }
+
+    private void StartEdit(UserRow u)
+    {
+        _newPassword = null;
+        _edit = new UserEdit { Id = u.Id, Email = u.Email, DisplayName = u.DisplayName, Role = u.Role == "Admin" ? "Admin" : "User", IsActive = u.IsActive };
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        try
+        {
+            var me = await CurrentUser.GetAsync();
+            if (_edit!.Id is null) await UserAdmin.CreateAsync(me, _edit);
+            else await UserAdmin.UpdateAsync(me, _edit);
+            Snackbar.Success("User saved.");
+            _edit = null;
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Error(ex);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task ResetPasswordAsync()
+    {
+        _saving = true;
+        try
+        {
+            await UserAdmin.ResetPasswordAsync(await CurrentUser.GetAsync(), _edit!.Id!, _newPassword!);
+            Snackbar.Success("Password reset.");
+            _newPassword = null;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Error(ex);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task DeleteAsync(UserRow user)
+    {
+        if (!await Confirm.AskAsync("Delete user", $"Delete {user.Email}? This cannot be undone.")) return;
+        try
+        {
+            await UserAdmin.DeleteAsync(await CurrentUser.GetAsync(), user.Id);
+            Snackbar.Success("User deleted.");
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Error(ex);
+        }
+    }
+}

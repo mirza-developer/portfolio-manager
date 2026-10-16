@@ -1,0 +1,78 @@
+@page "/"
+@inject IDashboardService DashboardApi
+@inject ICurrentUser CurrentUser
+@inject ISnackbar Snackbar
+
+<PageTitle>Dashboard</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="my-4">
+    <PageHeader Title="Dashboard" />
+
+    @if (_data is null)
+    {
+        <MudProgressLinear Indeterminate="true" />
+    }
+    else
+    {
+        <MudGrid>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4" Elevation="1">
+                    <MudText Typo="Typo.caption">Total portfolio value</MudText>
+                    <MudText Typo="Typo.h6"><MoneyText Value="_data.TotalValueUsdt" /></MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4" Elevation="1">
+                    <MudText Typo="Typo.caption">Tether (USDT) balance</MudText>
+                    <MudText Typo="Typo.h6"><MoneyText Value="_data.UsdtBalance" /></MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4" Elevation="1">
+                    <MudText Typo="Typo.caption">Holding positions</MudText>
+                    <MudText Typo="Typo.h6">@_data.HoldingCount</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4" Elevation="1">
+                    <MudText Typo="Typo.caption">Last trade</MudText>
+                    <MudText Typo="Typo.h6">@(_data.LastTradeUtc?.ToLocalTime().ToString("g") ?? "none yet")</MudText>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+
+        <MudText Typo="Typo.h6" Class="mt-6 mb-2">Latest trades</MudText>
+        <MudTable Items="_data.LatestTrades" Dense="true" Hover="true">
+            <HeaderContent>
+                <MudTh>Time</MudTh><MudTh>Portfolio</MudTh><MudTh>Asset</MudTh><MudTh>Side</MudTh><MudTh>Reason</MudTh><MudTh>Value</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>@context.TimestampUtc.ToLocalTime().ToString("g")</MudTd>
+                <MudTd>@context.PortfolioName</MudTd>
+                <MudTd>@context.Symbol</MudTd>
+                <MudTd>@context.Side</MudTd>
+                <MudTd>@context.Reason</MudTd>
+                <MudTd><MoneyText Value="context.ValueUsdt" /></MudTd>
+            </RowTemplate>
+            <NoRecordsContent><MudText>No trades yet.</MudText></NoRecordsContent>
+        </MudTable>
+    }
+
+    <MudAlert Severity="Severity.Info" Class="mt-6">No profit is guaranteed. The loss limit is a target: real prices can move past it between checks.</MudAlert>
+</MudContainer>
+
+@code {
+    private DashboardData? _data;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _data = await DashboardApi.GetAsync(await CurrentUser.GetAsync());
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Error(ex);
+        }
+    }
+}

@@ -1,0 +1,134 @@
+@page "/admin/assets"
+@attribute [Authorize(Policy = AppPolicies.AdminOnly)]
+@inject IAssetAdminService AssetAdmin
+@inject ICurrentUser CurrentUser
+@inject ConfirmService Confirm
+@inject ISnackbar Snackbar
+
+<PageTitle>Assets</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="my-4">
+    <PageHeader Title="Assets">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="StartNew">New asset</MudButton>
+    </PageHeader>
+
+    @if (_items is null)
+    {
+        <MudProgressLinear Indeterminate="true" />
+    }
+    else
+    {
+        <MudTable Items="_items" Dense="true" Hover="true">
+            <HeaderContent>
+                <MudTh>Symbol</MudTh><MudTh>Name</MudTh><MudTh>Min trade</MudTh><MudTh>Price source</MudTh><MudTh>Enabled</MudTh><MudTh></MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>@context.Symbol</MudTd>
+                <MudTd>@context.Name</MudTd>
+                <MudTd><MoneyText Value="context.MinTradeSizeUsdt" /></MudTd>
+                <MudTd>@context.PriceSource</MudTd>
+                <MudTd><MudSwitch T="bool" Value="context.IsEnabled" ValueChanged="@((bool v) => ToggleAsync(context, v))" Color="Color.Primary" /></MudTd>
+                <MudTd>
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="() => StartEdit(context)" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="() => DeleteAsync(context)" />
+                </MudTd>
+            </RowTemplate>
+            <NoRecordsContent><MudText>No assets yet.</MudText></NoRecordsContent>
+        </MudTable>
+    }
+
+    @if (_edit is not null)
+    {
+        <MudPaper Class="pa-4 mt-4" Elevation="1">
+            <MudText Typo="Typo.h6" Class="mb-2">@(_edit.Id is null ? "New asset" : "Edit asset")</MudText>
+            <MudForm @ref="_form" @bind-IsValid="_valid">
+                <MudGrid>
+                    <MudItem xs="12" md="3"><MudTextField T="string" Label="Symbol" @bind-Value="_edit.Symbol" Required="true" MaxLength="20" /></MudItem>
+                    <MudItem xs="12" md="3"><MudTextField T="string" Label="Name" @bind-Value="_edit.Name" Required="true" MaxLength="100" /></MudItem>
+                    <MudItem xs="12" md="2"><MudNumericField T="decimal" Label="Min trade (USDT)" @bind-Value="_edit.MinTradeSizeUsdt" Min="0" Required="true" /></MudItem>
+                    <MudItem xs="12" md="2"><MudTextField T="string" Label="Price source" @bind-Value="_edit.PriceSource" Required="true" MaxLength="50" /></MudItem>
+                    <MudItem xs="12" md="2"><MudSwitch T="bool" @bind-Value="_edit.IsEnabled" Color="Color.Primary" Label="Enabled" /></MudItem>
+                </MudGrid>
+            </MudForm>
+            <MudButton Class="mt-3" Variant="Variant.Filled" Color="Color.Primary" Disabled="@(!_valid || _saving)" OnClick="SaveAsync">Save</MudButton>
+            <MudButton Class="mt-3 ml-2" Variant="Variant.Outlined" OnClick="() => _edit = null">Cancel</MudButton>
+        </MudPaper>
+    }
+</MudContainer>
+
+@code {
+    private IReadOnlyList<Asset>? _items;
+    private AssetEdit? _edit;
+    private MudForm? _form;
+    private bool _valid, _saving;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _items = await AssetAdmin.ListAsync();
+        }
+        catch (Exception ex)
+        {
+            _items ??= Array.Empty<Asset>();
+            Snackbar.Error(ex);
+        }
+    }
+
+    private void StartNew() => _edit = new AssetEdit();
+
+    private void StartEdit(Asset a) => _edit = new AssetEdit
+    {
+        Id = a.Id, Symbol = a.Symbol, Name = a.Name, IsEnabled = a.IsEnabled, MinTradeSizeUsdt = a.MinTradeSizeUsdt, PriceSource = a.PriceSource
+    };
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        try
+        {
+            await AssetAdmin.SaveAsync(await CurrentUser.GetAsync(), _edit!);
+            Snackbar.Success("Asset saved.");
+            _edit = null;
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Error(ex);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task ToggleAsync(Asset asset, bool enabled)
+    {
+        try
+        {
+            await AssetAdmin.SetEnabledAsync(await CurrentUser.GetAsync(), asset.Id, enabled);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Error(ex);
+        }
+    }
+
+    private async Task DeleteAsync(Asset asset)
+    {
+        if (!await Confirm.AskAsync("Delete asset", $"Delete {asset.Symbol}? This cannot be undone.")) return;
+        try
+        {
+            await AssetAdmin.DeleteAsync(await CurrentUser.GetAsync(), asset.Id);
+            Snackbar.Success("Asset deleted.");
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Error(ex);
+        }
+    }
+}

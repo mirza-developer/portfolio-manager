@@ -1,0 +1,31 @@
+@inject ICurrentUser CurrentUser
+
+<MudNavMenu>
+    @foreach (var group in NavItems.VisibleFor(_isAdmin).GroupBy(i => i.Group))
+    {
+        <MudText Typo="Typo.overline" Class="px-4 mt-3">@group.Key</MudText>
+        @foreach (var item in group)
+        {
+            <MudNavLink Href="@item.Href" Match="@(item.Href == "/" ? NavLinkMatch.All : NavLinkMatch.Prefix)" Icon="@IconFor(item)">
+                @item.Title
+            </MudNavLink>
+        }
+    }
+</MudNavMenu>
+
+@code {
+    private bool _isAdmin;
+
+    protected override async Task OnInitializedAsync() => _isAdmin = (await CurrentUser.GetAsync()).IsAdmin;
+
+    private static string IconFor(NavItem item) => item.Href switch
+    {
+        "/" => Icons.Material.Filled.Dashboard,
+        "/portfolios" => Icons.Material.Filled.AccountBalanceWallet,
+        "/logs/trades" => Icons.Material.Filled.SwapHoriz,
+        "/logs/prices" => Icons.Material.Filled.ShowChart,
+        "/admin/assets" => Icons.Material.Filled.CurrencyBitcoin,
+        "/admin/users" => Icons.Material.Filled.People,
+        _ => Icons.Material.Filled.Circle
+    };
+}

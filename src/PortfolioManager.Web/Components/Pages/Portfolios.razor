@@ -1,0 +1,109 @@
+@page "/portfolios"
+@inject IPortfolioService PortfolioApi
+@inject IUserAdminService UserAdmin
+@inject ICurrentUser CurrentUser
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageTitle>Portfolios</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="my-4">
+    <PageHeader Title="Portfolios" />
+
+    @if (_items is null)
+    {
+        <MudProgressLinear Indeterminate="true" />
+    }
+    else
+    {
+        <MudTable Items="_items" Dense="true" Hover="true">
+            <HeaderContent>
+                <MudTh>Name</MudTh>
+                @if (_user!.IsAdmin) { <MudTh>Owner</MudTh> }
+                <MudTh>Value</MudTh><MudTh>USDT balance</MudTh><MudTh>Stop-loss</MudTh><MudTh>Holding</MudTh><MudTh>Auto-trading</MudTh><MudTh></MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>@context.Name</MudTd>
+                @if (_user!.IsAdmin) { <MudTd>@context.OwnerName</MudTd> }
+                <MudTd><MoneyText Value="context.TotalValueUsdt" /></MudTd>
+                <MudTd><MoneyText Value="context.UsdtBalance" /></MudTd>
+                <MudTd>@context.StopLossPercent %</MudTd>
+                <MudTd>@context.HoldingCount</MudTd>
+                <MudTd><MudChip T="string" Size="Size.Small" Color="@(context.IsAutoTradingEnabled ? Color.Success : Color.Default)">@(context.IsAutoTradingEnabled ? "On" : "Off")</MudChip></MudTd>
+                <MudTd><MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="() => Open(context.Id)">Details</MudButton></MudTd>
+            </RowTemplate>
+            <NoRecordsContent><MudText>No portfolios yet.</MudText></NoRecordsContent>
+        </MudTable>
+
+        @if (_user!.IsAdmin)
+        {
+            <MudPaper Class="pa-4 mt-6" Elevation="1">
+                <MudText Typo="Typo.h6" Class="mb-2">New portfolio</MudText>
+                <MudForm @ref="_form" @bind-IsValid="_valid">
+                    <MudGrid>
+                        <MudItem xs="12" md="4">
+                            <MudSelect T="string" Label="Owner" @bind-Value="_ownerId" Required="true">
+                                @foreach (var u in _users) { <MudSelectItem Value="@u.Id">@u.Email</MudSelectItem> }
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12" md="4"><MudTextField T="string" Label="Name" @bind-Value="_name" Required="true" MaxLength="200" /></MudItem>
+                        <MudItem xs="12" md="4"><MudNumericField T="decimal" Label="Initial USDT" @bind-Value="_usdt" Min="0" Required="true" /></MudItem>
+                    </MudGrid>
+                </MudForm>
+                <MudButton Class="mt-3" Variant="Variant.Filled" Color="Color.Primary" Disabled="@(!_valid || _saving)" OnClick="CreateAsync">Create</MudButton>
+            </MudPaper>
+        }
+    }
+</MudContainer>
+
+@code {
+    private UserContext? _user;
+    private IReadOnlyList<PortfolioSummary>? _items;
+    private IReadOnlyList<UserRow> _users = Array.Empty<UserRow>();
+    private MudForm? _form;
+    private bool _valid, _saving;
+    private string? _ownerId;
+    private string _name = string.Empty;
+    private decimal _usdt;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _user = await CurrentUser.GetAsync();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _items = await PortfolioApi.ListAsync(_user!);
+            if (_user!.IsAdmin) _users = await UserAdmin.ListAsync(_user);
+        }
+        catch (Exception ex)
+        {
+            _items ??= Array.Empty<PortfolioSummary>();
+            Snackbar.Error(ex);
+        }
+    }
+
+    private void Open(int id) => Navigation.NavigateTo($"/portfolios/{id}");
+
+    private async Task CreateAsync()
+    {
+        _saving = true;
+        try
+        {
+            var id = await PortfolioApi.CreatePortfolioAsync(_user!, _ownerId!, _name, _usdt);
+            Snackbar.Success("Portfolio created.");
+            Navigation.NavigateTo($"/portfolios/{id}");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Error(ex);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

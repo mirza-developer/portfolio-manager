@@ -1,0 +1,75 @@
+@page "/logs/prices"
+@inject ILogQueryService Logs
+@inject IAssetAdminService Assets
+@inject ISnackbar Snackbar
+
+<PageTitle>Price logs</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="my-4">
+    <PageHeader Title="Price logs" />
+
+    <MudPaper Class="pa-4 mb-4" Elevation="1">
+        <MudGrid>
+            <MudItem xs="12" sm="4">
+                <MudSelect T="int?" Label="Asset" @bind-Value="_filter.AssetId" Clearable="true">
+                    @foreach (var a in _assets) { <MudSelectItem T="int?" Value="@((int?)a.Id)">@a.Symbol</MudSelectItem> }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="4"><MudDatePicker Label="From" @bind-Date="_from" Clearable="true" /></MudItem>
+            <MudItem xs="12" sm="4"><MudDatePicker Label="To" @bind-Date="_to" Clearable="true" /></MudItem>
+        </MudGrid>
+        <MudButton Class="mt-3" Variant="Variant.Filled" Color="Color.Primary" OnClick="ApplyAsync">Apply filters</MudButton>
+    </MudPaper>
+
+    <MudTable T="PriceLogRow" @ref="_table" ServerData="LoadAsync" Dense="true" Hover="true">
+        <HeaderContent>
+            <MudTh>Time</MudTh><MudTh>Asset</MudTh><MudTh>Price</MudTh><MudTh>Source</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>@context.TimestampUtc.ToLocalTime().ToString("g")</MudTd>
+            <MudTd>@context.Symbol</MudTd>
+            <MudTd><MoneyText Value="context.PriceUsdt" Decimals="4" /></MudTd>
+            <MudTd>@context.Source</MudTd>
+        </RowTemplate>
+        <NoRecordsContent><MudText>No prices match the filters.</MudText></NoRecordsContent>
+        <LoadingContent><MudProgressLinear Indeterminate="true" /></LoadingContent>
+        <PagerContent><MudTablePager PageSizeOptions="new[] { 10, 25, 50, 100 }" /></PagerContent>
+    </MudTable>
+</MudContainer>
+
+@code {
+    private MudTable<PriceLogRow>? _table;
+    private readonly PriceLogFilter _filter = new();
+    private IReadOnlyList<Asset> _assets = Array.Empty<Asset>();
+    private DateTime? _from, _to;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _assets = await Assets.ListAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Error(ex);
+        }
+    }
+
+    private async Task<TableData<PriceLogRow>> LoadAsync(TableState state, CancellationToken ct)
+    {
+        try
+        {
+            _filter.FromUtc = _from?.Date.ToUniversalTime();
+            _filter.ToUtc = _to?.Date.AddDays(1).ToUniversalTime();
+            var page = await Logs.GetPriceLogsAsync(_filter, state.Page, state.PageSize, ct);
+            return new TableData<PriceLogRow> { Items = page.Items, TotalItems = page.TotalCount };
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Error(ex);
+            return new TableData<PriceLogRow> { Items = Array.Empty<PriceLogRow>(), TotalItems = 0 };
+        }
+    }
+
+    private Task ApplyAsync() => _table is null ? Task.CompletedTask : _table.ReloadServerData();
+}

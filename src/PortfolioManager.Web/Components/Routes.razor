@@ -1,0 +1,26 @@
+<Router AppAssembly="typeof(Program).Assembly">
+    <Found Context="routeData">
+        <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)">
+            <NotAuthorized Context="auth">
+                @if (auth.User.Identity?.IsAuthenticated == true)
+                {
+                    <MudContainer MaxWidth="MaxWidth.Medium" Class="my-8">
+                        <MudAlert Severity="Severity.Warning">You do not have access to this page.</MudAlert>
+                    </MudContainer>
+                }
+                else
+                {
+                    <RedirectToLogin />
+                }
+            </NotAuthorized>
+        </AuthorizeRouteView>
+        <FocusOnNavigate RouteData="routeData" Selector="h1" />
+    </Found>
+    <NotFound>
+        <LayoutView Layout="typeof(Layout.MainLayout)">
+            <MudContainer MaxWidth="MaxWidth.Medium" Class="my-8">
+                <MudAlert Severity="Severity.Info">This page does not exist.</MudAlert>
+            </MudContainer>
+        </LayoutView>
+    </NotFound>
+</Router>

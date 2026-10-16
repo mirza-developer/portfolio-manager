@@ -1,0 +1,195 @@
+@page "/portfolios/{Id:int}"
+@inject IPortfolioService Portfolios
+@inject IAssetAdminService Assets
+@inject ICurrentUser CurrentUser
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageTitle>Portfolio</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="my-4">
+    @if (_loading)
+    {
+        <MudProgressLinear Indeterminate="true" />
+    }
+    else if (_details is null)
+    {
+        <MudAlert Severity="Severity.Warning">This portfolio does not exist or is not yours.</MudAlert>
+    }
+    else
+    {
+        <PageHeader Title="@_details.Name">
+            <MudButton Variant="Variant.Outlined" OnClick="@(() => Navigation.NavigateTo("/portfolios"))">Back</MudButton>
+        </PageHeader>
+
+        <MudGrid>
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-4" Elevation="1">
+                    <MudText Typo="Typo.caption">Owner: @_details.OwnerName</MudText>
+                    <MudText Typo="Typo.h6">Value: <MoneyText Value="_details.TotalValueUsdt" /></MudText>
+                    <MudText Typo="Typo.body1">USDT balance: <MoneyText Value="_details.UsdtBalance" /></MudText>
+                    @if (_user!.IsAdmin)
+                    {
+                        <MudNumericField T="decimal" Label="Set USDT balance" @bind-Value="_newBalance" Min="0" Class="mt-2" />
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="_saving" OnClick="SaveBalanceAsync">Update balance</MudButton>
+                    }
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-4" Elevation="1">
+                    <MudText Typo="Typo.h6" Class="mb-2">Settings</MudText>
+                    <MudForm @ref="_form" @bind-IsValid="_valid">
+                        <MudNumericField T="decimal" Label="Stop-loss % (sell all when the value falls this far below its benchmark)" @bind-Value="_settings!.StopLossPercent" Min="0.01M" Max="99.99M" Required="true" />
+                        <MudNumericField T="decimal" Label="Max allocation % per asset" @bind-Value="_settings.MaxAllocationPercent" Min="0.01M" Max="100" Required="true" />
+                        <MudNumericField T="decimal" Label="Cash reserve % kept in USDT" @bind-Value="_settings.CashReservePercent" Min="0" Max="99.99M" Required="true" />
+                        <MudNumericField T="int" Label="Cooldown hours after a sale" @bind-Value="_settings.CooldownHours" Min="0" Max="720" Required="true" />
+                        <MudNumericField T="decimal" Label="Re-entry recovery %" @bind-Value="_settings.ReentryRecoveryPercent" Min="0" Max="100" Required="true" />
+                        <MudSwitch T="bool" @bind-Value="_settings.IsAutoTradingEnabled" Color="Color.Primary" Label="Auto-trading" />
+                    </MudForm>
+                    <MudButton Class="mt-2" Variant="Variant.Filled" Color="Color.Primary" Disabled="@(!_valid || _saving)" OnClick="SaveSettingsAsync">Save settings</MudButton>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+
+        <MudText Typo="Typo.h6" Class="mt-6 mb-2">Positions</MudText>
+        <MudTable Items="_details.Positions" Dense="true" Hover="true">
+            <HeaderContent>
+                <MudTh>Asset</MudTh><MudTh>Quantity</MudTh><MudTh>Value</MudTh><MudTh>Benchmark</MudTh><MudTh>Drawdown</MudTh><MudTh>Limit</MudTh><MudTh>Status</MudTh>
+                @if (_user!.IsAdmin) { <MudTh></MudTh> }
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>@context.Symbol</MudTd>
+                <MudTd>@context.Quantity</MudTd>
+                <MudTd>@(context.HasPrice ? context.ValueUsdt.ToString("N2") + " USDT" : "no price yet")</MudTd>
+                <MudTd><MoneyText Value="context.BenchmarkValueUsdt" /></MudTd>
+                <MudTd>@context.DrawdownPercent.ToString("N2") %</MudTd>
+                <MudTd>@context.LimitPercent % @(context.StopLossPercentOverride is null ? "" : "(override)")</MudTd>
+                <MudTd><MudChip T="string" Size="Size.Small" Color="@StatusColor(context.Status)">@context.Status</MudChip></MudTd>
+                @if (_user!.IsAdmin)
+                {
+                    <MudTd><MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="() => StartEdit(context)" /></MudTd>
+                }
+            </RowTemplate>
+            <NoRecordsContent><MudText>No positions.</MudText></NoRecordsContent>
+        </MudTable>
+
+        @if (_user!.IsAdmin)
+        {
+            <MudPaper Class="pa-4 mt-4" Elevation="1">
+                <MudText Typo="Typo.h6" Class="mb-2">@(_editPositionId is null ? "Add position" : "Edit position")</MudText>
+                <MudGrid>
+                    @if (_editPositionId is null)
+                    {
+                        <MudItem xs="12" md="3">
+                            <MudSelect T="int" Label="Asset" @bind-Value="_assetId">
+                                @foreach (var a in _assets.Where(a => a.IsEnabled)) { <MudSelectItem Value="@a.Id">@a.Symbol</MudSelectItem> }
+                            </MudSelect>
+                        </MudItem>
+                    }
+                    <MudItem xs="12" md="3"><MudNumericField T="decimal" Label="Quantity" @bind-Value="_edit.Quantity" Min="0" /></MudItem>
+                    <MudItem xs="12" md="3"><MudNumericField T="decimal" Label="Initial value v0 (USDT)" @bind-Value="_edit.InitialValueUsdt" Min="0" /></MudItem>
+                    @if (_editPositionId is not null)
+                    {
+                        <MudItem xs="12" md="3"><MudNumericField T="decimal?" Label="Stop-loss override % (optional)" @bind-Value="_edit.StopLossPercentOverride" Min="0.01M" Max="99.99M" Clearable="true" /></MudItem>
+                    }
+                </MudGrid>
+                <MudButton Class="mt-3" Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving" OnClick="SavePositionAsync">@(_editPositionId is null ? "Add" : "Save")</MudButton>
+                @if (_editPositionId is not null)
+                {
+                    <MudButton Class="mt-3 ml-2" Variant="Variant.Outlined" OnClick="CancelEdit">Cancel</MudButton>
+                }
+            </MudPaper>
+        }
+    }
+</MudContainer>
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private UserContext? _user;
+    private PortfolioDetails? _details;
+    private PortfolioSettings? _settings = new();
+    private IReadOnlyList<Asset> _assets = Array.Empty<Asset>();
+    private MudForm? _form;
+    private bool _loading = true, _valid, _saving;
+    private decimal _newBalance;
+    private int _assetId;
+    private int? _editPositionId;
+    private PositionEdit _edit = new();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _user = await CurrentUser.GetAsync();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _details = await Portfolios.GetAsync(_user!, Id);
+            if (_details is not null)
+            {
+                _settings = _details.Settings;
+                _newBalance = _details.UsdtBalance;
+                if (_user!.IsAdmin) _assets = await Assets.ListAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Error(ex);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static Color StatusColor(PositionStatus status) => status switch
+    {
+        PositionStatus.Holding => Color.Success,
+        PositionStatus.Cooldown => Color.Warning,
+        _ => Color.Default
+    };
+
+    private async Task Run(Func<Task> action, string successMessage)
+    {
+        _saving = true;
+        try
+        {
+            await action();
+            Snackbar.Success(successMessage);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Error(ex);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private Task SaveSettingsAsync() => Run(() => Portfolios.UpdateSettingsAsync(_user!, Id, _settings!), "Settings saved.");
+
+    private Task SaveBalanceAsync() => Run(() => Portfolios.UpdateUsdtBalanceAsync(_user!, Id, _newBalance), "Balance updated.");
+
+    private void StartEdit(PositionRow row)
+    {
+        _editPositionId = row.Id;
+        _edit = new PositionEdit { Quantity = row.Quantity, InitialValueUsdt = row.InitialValueUsdt, StopLossPercentOverride = row.StopLossPercentOverride };
+    }
+
+    private void CancelEdit()
+    {
+        _editPositionId = null;
+        _edit = new PositionEdit();
+    }
+
+    private Task SavePositionAsync() => _editPositionId is int positionId
+        ? Run(async () => { await Portfolios.UpdatePositionAsync(_user!, Id, positionId, _edit); CancelEdit(); }, "Position saved.")
+        : Run(async () => { await Portfolios.AddPositionAsync(_user!, Id, _assetId, _edit.Quantity, _edit.InitialValueUsdt); CancelEdit(); }, "Position added.");
+}

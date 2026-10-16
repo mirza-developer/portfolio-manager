@@ -1,0 +1,8 @@
+@using System.Globalization
+<span class="@Class">@Value.ToString("N" + Decimals, CultureInfo.InvariantCulture) USDT</span>
+
+@code {
+    [Parameter] public decimal Value { get; set; }
+    [Parameter] public int Decimals { get; set; } = 2;
+    [Parameter] public string? Class { get; set; }
+}

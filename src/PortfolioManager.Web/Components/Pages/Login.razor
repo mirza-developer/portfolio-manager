@@ -1,0 +1,30 @@
+@page "/account/login"
+@layout EmptyLayout
+@attribute [AllowAnonymous]
+@attribute [ExcludeFromInteractiveRouting]
+
+<PageTitle>Sign in</PageTitle>
+
+@* Static page: the auth cookie must be set by a normal form POST, so this one form uses native inputs (documented exception to the MudBlazor-only rule). *@
+<div class="login-wrap">
+    <div class="mud-paper mud-elevation-2 pa-6 login-card">
+        <h1 class="mud-typography mud-typography-h5 mb-4">Portfolio Manager</h1>
+        @if (Error is not null)
+        {
+            <div class="mud-alert mud-alert-text-error pa-3 mb-4">Invalid email or password.</div>
+        }
+        <form method="post" action="/account/login">
+            <AntiforgeryToken />
+            <input type="hidden" name="ReturnUrl" value="@ReturnUrl" />
+            <label class="login-label">Email<input class="login-input" type="email" name="Email" autocomplete="username" required /></label>
+            <label class="login-label">Password<input class="login-input" type="password" name="Password" autocomplete="current-password" required /></label>
+            <label class="login-check"><input type="checkbox" name="RememberMe" value="true" /> Remember me</label>
+            <button class="mud-button-root mud-button mud-button-filled mud-button-filled-primary mud-button-filled-size-medium login-submit" type="submit">Sign in</button>
+        </form>
+    </div>
+</div>
+
+@code {
+    [SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
+    [SupplyParameterFromQuery] public string? Error { get; set; }
+}

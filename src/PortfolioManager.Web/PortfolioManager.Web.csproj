@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <RootNamespace>PortfolioManager.Web</RootNamespace>
+    <UserSecretsId>portfolio-manager-web</UserSecretsId>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="MudBlazor" Version="7.8.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\PortfolioManager.Core\PortfolioManager.Core.csproj" />
+    <ProjectReference Include="..\PortfolioManager.Data\PortfolioManager.Data.csproj" />
+    <ProjectReference Include="..\PortfolioManager.Data.Migrations.Sqlite\PortfolioManager.Data.Migrations.Sqlite.csproj" />
+    <ProjectReference Include="..\PortfolioManager.Data.Migrations.SqlServer\PortfolioManager.Data.Migrations.SqlServer.csproj" />
+  </ItemGroup>
+</Project>
